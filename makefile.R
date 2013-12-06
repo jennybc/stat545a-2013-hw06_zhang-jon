@@ -1,8 +1,17 @@
 ## one script to rule them all
 
+## fine-tune the cleaning strategy to avoid this redoing this step in most
+## scenarios; set nuke to TRUE if you want to re-clean and assemble the data
+nuke <- FALSE
+
 ## clean out any previous work
-outputs <- c("LFS.csv", # 01_filterReorder.R
-             list.files(pattern = "*.png$"))
+if(nuke) {
+  outputs <- c("LFS.tsv",
+               list.files(pattern = "*.png$"))
+} else {
+  outputs <- c(list.files(pattern = "*.png$"))
+}
+
 file.remove(outputs)
 
 ## run my scripts

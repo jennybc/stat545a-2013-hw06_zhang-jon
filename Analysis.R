@@ -1,13 +1,14 @@
-LFS <- read.delim("LFS.csv")
+LFS <- read.delim("LFS.tsv")
 
 library(plyr)
 library(ggplot2)
 library(gridExtra)
 
 
-wageByYear <- ddply(LFS, .(SURVYEAR, PROV, EDUC), summarize, AvgWage=mean(HRLYEARN, na.rm=TRUE))
+wageByYear <- ddply(LFS, .(SURVYEAR, PROV, EDUC), summarize,
+                    AvgWage=mean(HRLYEARN, na.rm=TRUE))
 p <- ggplot(wageByYear, aes(x = SURVYEAR, y = AvgWage, color=EDUC))
-p+ geom_point(cex=3) + geom_line(lwd=1) + facet_wrap(~PROV)
+p + geom_point(cex=3) + geom_line(lwd=1) + facet_wrap(~PROV)
 
 ggsave("AvgWagebyProv.png")
 
@@ -52,7 +53,7 @@ grid.arrange(a, b, c, ncol=1)
 dev.off()
 
 ## Regression on returns to education. Only a table, nothing to really plot
-EducReg <- function(x){
+EducReg <- function(x) {
   Coefs <- coef(lm(HRLYEARN ~ factor(EDUC), x))
   names(Coefs) <- c("Intercept", "HS Dropout", "HS Grad", "Some PS")
   return(Coefs)
