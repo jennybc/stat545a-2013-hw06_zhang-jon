@@ -1,0 +1,266 @@
+Homework 6
+========================================================
+
+By Jonathan Zhang
+
+
+Labour Force Survey (LFS) Data
+========================================================
+
+In this assignment I will attempt to use a new dataset, specifically the **Canadian Labour Force Survey (LFS)**. The Labour Force Survey is published each month by Statistics Canada and provides estimates on unemployment, labour force participation and other indicators. It also includes hourly wages, tenure, occupation, industry, demographics, etc for each employee. 
+
+The data can be downloaded from UBC Data Library ABACUS. The data is originally in SPSS format with a syntax file and must be converted. There are around 79 original variables, with all but 3 of them being categorical. Because the LFS is a stratified multi-stage survey, the subjects surveyed remain in the LFS for 6 months. Thus economists often look at data that are at least 6 months apart. Because of this I took data from March. The main purpose of looking at economic labour data is to analyze relations between variables and wage. Therefore, I chose the relevant variables. Many of the variables I dropped were just different representations of essentially the same thing. There are also a lot of missing data in `HRLYEARN` or `TENURE` etc.
+
+Much of my time was spent on cleaning the data. The data cleaning had to be done on MS Excel in CSV format; R would freeze trying to load the raw data which had over 3 million rows. 
+
+Out of 78 variables, I selected the relevant variables.  
+The categorical variables are:  
+`YEAR` Years from 1997 to 2013 (Only use March for each year)
+`PROV` Province: I only took the data for the 4 major province: BC, AL, ON, QU  
+`SEX` Male or Female  
+`AGE` Working age falls in 10 year intervals from 15 to 54  
+`EDUC` There are 4 education levels: `HS Dropout`, `HS Grad`, `Some PS`, `BA or More`.
+`UNION` An indicator stating whether their main job is unionzed  
+
+The quantitative variables are:  
+`HOURS` Hours of works worked on average per week  
+`TENURE` Tenure at their main job (in months)  
+`HRLYEARN` Hourly earnings at their main job  
+
+As mentioned in my previous assignment that I ignore the frequency weights. I know this is probably not the way to go, therefore my analysis will be very crude. However, I see from my previous analysis that looking at exploratory trends is fine.
+
+Cleaning
+========================================================
+Unlike Homework 5 where the cleaning were all done on Excel (it was actually a lot quicker. `R` is very slow with large datasets), I clean everything with R in this assignment.
+
+Load library `plyr`
+```{r}
+library(plyr)
+```
+Import all 17 years of data manually and do a quick check of one of the datasets. Notice how large they are.
+```{r}
+LFS97 <- read.csv(file="~/stat545/Stat545A/LFS/97.csv")
+LFS98 <- read.csv(file="~/stat545/Stat545A/LFS/98.csv")
+LFS99 <- read.csv(file="~/stat545/Stat545A/LFS/99.csv")
+LFS00 <- read.csv(file="~/stat545/Stat545A/LFS/00.csv")
+LFS01 <- read.csv(file="~/stat545/Stat545A/LFS/01.csv")
+LFS02 <- read.csv(file="~/stat545/Stat545A/LFS/02.csv")
+LFS03 <- read.csv(file="~/stat545/Stat545A/LFS/03.csv")
+LFS04 <- read.csv(file="~/stat545/Stat545A/LFS/04.csv")
+LFS05 <- read.csv(file="~/stat545/Stat545A/LFS/05.csv")
+LFS06 <- read.csv(file="~/stat545/Stat545A/LFS/06.csv")
+LFS07 <- read.csv(file="~/stat545/Stat545A/LFS/07.csv")
+LFS08 <- read.csv(file="~/stat545/Stat545A/LFS/08.csv")
+LFS09 <- read.csv(file="~/stat545/Stat545A/LFS/09.csv")
+LFS10 <- read.csv(file="~/stat545/Stat545A/LFS/10.csv")
+LFS11 <- read.csv(file="~/stat545/Stat545A/LFS/11.csv")
+LFS12 <- read.csv(file="~/stat545/Stat545A/LFS/12.csv")
+LFS13 <- read.csv(file="~/stat545/Stat545A/LFS/13.csv")
+
+str(LFS97)
+```
+We must individually remove variables and then combine instead of combining and then removing. This is because some datasets have different variables that are inconsistent. Long story short: this is the only way! We create a vector of variable names we would like to keep and use `ldply` to combine.
+
+```{r}
+data <- list(LFS97, LFS98, LFS99, LFS00, LFS01, LFS02, LFS03, LFS04, LFS05, LFS06, LFS07, LFS08, LFS09, LFS10, LFS11, LFS12, LFS13)
+
+columnKeep <- c("SURVYEAR", "LFSSTAT", "PROV", "AGE_12", "SEX", "EDUC90", "TENURE", "UNION", "HRLYEARN", "ATOTHRS")
+
+keep <- function(x) {
+    x<-subset(x, select=columnKeep)
+    return(x)
+}
+
+LFSraw <- ldply(data, keep)
+
+str(LFSraw)
+```
+
+Notice how ugly our data is. For simplicity I only want to keep the 4 major Provinces, and I want to avoid the "British Co" name, and the accent on "Quebec". Similarly I would like to make the `UNION` variable simply an indicator. Clean up the `EDUC90` variable and change the variable name to `EDUC`. I clean each variable by creating a function that changes the factor levels and then using `sapply`. `plyr` is not needed.
+
+```{r}
+provinces <- c("Alberta", "British Co", "Ontario", "Québec")
+
+LFS <- droplevels(subset(LFSraw, PROV %in% provinces & LFSSTAT != "Not in lab"))
+
+#ATOTHRS is average total hours you work per week
+names(LFS)[names(LFS) == 'ATOTHRS']<-"HOURS"
+
+newEducation <- function(x){
+  if(x=="0 to 8 yea" | x=="Some secon")
+   return("HS Dropout")
+  if(x=="Grade 11 t")
+    return("HS Grad")
+  if(x=="Post secon" | x=="Some post")
+    return("Some PS")
+  else
+    return("BA or More")
+}
+
+newUnion <- function(x){
+  if(x=="Union memb")
+   return("Yes")
+  if(x=="Not member")
+    return("No")
+  else
+    return("NA")
+}
+
+newProv <- function(x){
+  if(x=="British Co")
+   return("BC")
+  if(x=="Alberta")
+    return("AL")
+  if(x=="Ontario")
+    return("ON")
+  else
+    return("QU")
+}
+
+newAge <- function(x){
+  if(x=="15 to 19" | x=="20 to 24" | x=="25 to 29")
+   return("15-29")
+  if(x=="30 to 34" | x=="35 to 39" | x=="40 to 44")
+    return("30-44")
+  if(x=="45 to 49" | x=="50 to 54" | x=="55 to 59")
+   return("45-59")
+  else
+    return("60+")
+}
+
+# Create the new variables
+LFS$EDUC <- as.factor(sapply(LFS$EDUC90, newEducation))
+LFS$PROV <- as.factor(sapply(LFS$PROV, newProv))
+LFS$UNION<- as.factor(sapply(LFS$UNION, newUnion))
+LFS$AGE <- as.factor(sapply(LFS$AGE_12, newAge))
+
+# Let's drop EDUC90 variable
+LFS<-LFS[,!names(LFS) %in% c("EDUC90", "AGE_12")]
+
+str(LFS)
+```
+
+Now we are very close! However, the data is still way too large. Of course we can take a random sample. I choose to have the same number of entries per year: 1000. This is entirely arbitrary on my part.
+
+```{r}
+# I want to create a random sample of 1000 observations for each year.
+set.seed(123)
+
+random <- function(x){
+  samples<-sample(1:nrow(x), 1000)
+  set <- x[samples,]
+}
+
+LFS<-ddply(LFS, ~SURVYEAR, random)
+```
+
+Now we save this cleaned dataset.
+
+```{r}
+write.table(LFS, "LFS.csv", quote=FALSE, sep="\t", row.names=FALSE)
+```
+
+Analysis
+========================================================
+Load the clean data.
+
+```{r}
+LFS <- read.delim(file="~/stat545/Stat545A/LFS/LFS.csv")
+str(LFS)
+
+library(plyr)
+library(ggplot2)
+library(gridExtra)
+library(xtable)
+```
+
+First we can look at the average wage by province for each education level. Not surprisingly higher education earn more, and that nominal wages are increasing. Notice that Alberta has the most fluctuations, but also the highest earnings. I was not able to reorder the education levels, I think this is because the data is too micro and on individuals.. `reorder` does not know how to reorder the education levels due to this? I tried, but unfortunately could not arrive at anything.
+
+```{r}
+wageByYear <- ddply(LFS, .(SURVYEAR, PROV, EDUC), summarize, AvgWage=mean(HRLYEARN, na.rm=TRUE))
+
+p <- ggplot(wageByYear, aes(x = SURVYEAR, y = AvgWage, color=EDUC))
+p+ geom_point(cex=3) + geom_line(lwd=1) + facet_wrap(~PROV)
+```
+
+How about difference in wages between the genders? This is an interesting question. There appears to be about a 4 dollar gap (per hour wage) between the two genders. This gap is neither shrinking nor increasing. We can also do this by education level, however, the results are not that interesting either.
+
+```{r}
+wageBySex <- ddply(LFS, .(SURVYEAR, SEX), summarize, AvgWage=mean(HRLYEARN, na.rm=TRUE))
+ggplot(wageBySex, aes(x=SURVYEAR, y=AvgWage, col=SEX)) + geom_point(cex=4) + geom_line(lwd=1.5)
+```
+
+Next we can look at hourly earnings by education level over time. We will compare the extremes: `HS Dropouts` vs `BA or More`. We see that over time the highest earnings of the more educated are getting richer, and the gap of the median, as shown by the red line is steeper. This could mean that the gap between the educated and the non-educated are increasing! We will return to this later.
+
+```{r}
+ggplot(droplevels(subset(LFS, EDUC %in% c("BA or More", "HS Dropout"))), aes(x=EDUC, y=HRLYEARN)) + geom_jitter(na.rm=TRUE) + facet_wrap(~SURVYEAR) + geom_line(stat = "summary", fun.y = "median", col = "red", lwd = 1, aes(group=SURVYEAR), na.rm=TRUE)
+```
+
+Let us look at the unemployment rate. Caution: we are ignoring the frequency weights, and this is a relatively small sample of the population, therefore we absolutely CANNOT interpret this as an actual unemployment rate. Any analysis here, (in fact in most of this report) is extremely crude and is only useful in looking at trends. Ideally this would be the very preliminary stages of analysis with a dataset of this size.
+
+However, what we see is that unemployment fluctuates immensely and that `HS dropouts` have the highest unemployment and `BA or More` have the lowest. This is true across all provinces. This is exactly what we would expect.
+
+```{r}
+ratio <- function(x,y){
+  sum(x=="Unemployed")/length(y)
+}
+
+unemploymentRate <- ddply(LFS, .(SURVYEAR, PROV, EDUC), summarize, UnemploymentRate=ratio(LFSSTAT,PROV), 
+                          count=sum(LFSSTAT=="Unemployed"))
+
+ggplot(unemploymentRate, aes(x=SURVYEAR, y=UnemploymentRate, color=EDUC)) +geom_point()+geom_line()+facet_wrap(~PROV)+scale_fill_brewer(type = "qual", palette = 7)
+
+```
+
+Often Economists and policy makers are interested in the effects of unions. Some common questions are do unionized workers earn more? Do they work better hours? Are their jobs more stable? We can look at some brief answers to these questions by looking at the distribution of `HOURS` (average hours worked a week), `HRLYEARN` (hourly earnings) and `TENURE` (Tenure at their main job). Our results: Unionized employees tend to work slightly less, earn more, and have longer tenure. This is true for both male and females. I find this result particularly interesting, and also quite intuitive.
+
+```{r}
+# Remove the missing data
+unionizedlfs<-subset(LFS, !(subset=is.na(UNION)))
+
+a <- ggplot(unionizedlfs, aes(x = HOURS, color=UNION)) + geom_density(lwd = 1) + facet_wrap(~SEX)
+b <- ggplot(unionizedlfs, aes(x = HRLYEARN, color=UNION)) + geom_density(lwd = 1) + facet_wrap(~SEX)
+c <- ggplot(unionizedlfs, aes(x = TENURE, color=UNION)) + geom_density(lwd = 1) + facet_wrap(~SEX)
+
+grid.arrange(a, b, c, ncol=1)
+```
+
+We return to our curiosity regarding education attainment and earnings. This is what Economists call "returns to education". We fit a regression model with earnings on education. Again this is not advised because we are not considering other variables. However, in this case the intercept is the average education of someone with `BA or More` education, the coefficient on `HS Dropout` is how much lower their earnings are on average, etc. We notice that the returns to education has been consistently rising (the coefficients are more and more negative), except for the year 2010. In the year 2010 the differences in earnings between the less educated and more educated are smaller. Because the Labour Force Survey is slightly lagged, this captures the results of the 2007-2009 recession. This tells us that during the recession, the drop of wages was not equal across all people; the educated `BA or More` group experienced a larger drop in earnings. Without going into too much detail I will offer some insight as to why: there is a structural shift in the labour market regarding high skilled jobs, and manual labour/routine jobs. During the recession, firms will substitute away from high skilled jobs, however, they cannot fire the cashiers, retail workers, clerks, because they are absolutely necessary. In addition, if it is the case that much of the less employed workers are working minimum wage jobs, a recession cannot possibly drop their wage below the minimum wage.
+
+```{r}
+EducReg <- function(x){
+  Coefs <- coef(lm(HRLYEARN ~ factor(EDUC), x))
+  names(Coefs) <- c("Intercept", "HS Dropout", "HS Grad", "Some PS")
+  return(Coefs)
+}
+
+ReturnsToEducation <- ddply(LFS, ~SURVYEAR, EducReg)
+```
+
+```{r results='asis'}
+print(xtable(ReturnsToEducation), type='html', include.rownames = FALSE)
+```
+
+Unfortunately this isn't much to graph with this regression, this is because we are working with almost data of individuals..
+
+Finally we can look at some quick distributions of earnings and tenure. As expected: men earn more, IQR of earnings increasing across all provinces, and tenure is higher for older people.
+
+```{r}
+smallset <- subset(LFS, subset=SURVYEAR %in% c("1997", "2002", "2007", "2012"))
+
+ggplot(smallset, aes(x = PROV, y = HRLYEARN, fill = PROV)) + geom_boxplot(alpha = 0.2, na.rm=TRUE) + facet_wrap(~SURVYEAR) + ggtitle("Boxplot of Earnings by Province")
+
+# Distribution of Earnings and Tenure
+
+ggplot(smallset, aes(x = HRLYEARN, color = SEX)) + geom_density(lwd = 1, na.rm=TRUE) + facet_wrap(~SURVYEAR) +ggtitle("Density of Earnings")
+
+ggplot(LFS, aes(x=TENURE, color=AGE)) + geom_density(lwd=1.5, na.rm=TRUE) 
+```
+
+
+Conclusion
+========================================================
+
+This dataset is very individualized, therefore not a lot can be produced graphically. Much of the work was in the data cleaning with R. Because I am ignoring the frequency weights and sampling a rather small sample (R cannot run large datasets well), I will repeat again that all analysis are very preliminary. Therefore, I am limited to the constraints of the dataset.
+
+Jack Ni is also working on the same dataset (because I was more familiar with the dataset, I did the data cleaning. I had to explain the dataset to him along with the technicalities, and thus his code is probably very similar to mine). I also gave the raw zip file to Mo Bolandnazar. 
