@@ -2,7 +2,7 @@
 
 ## fine-tune the cleaning strategy to avoid this redoing this step in most
 ## scenarios; set nuke to TRUE if you want to re-clean and assemble the data
-nuke <- FALSE
+nuke <- TRUE
 
 ## clean out any previous work
 if(nuke) {
@@ -15,5 +15,5 @@ if(nuke) {
 file.remove(outputs)
 
 ## run my scripts
-source("Clean.R")
+if(!file.exists("LFS.tsv")) source("Clean.R")
 source("Analysis.R")
